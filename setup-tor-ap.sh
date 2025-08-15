@@ -157,7 +157,7 @@ configure_network(){
   success "Network configured"
 }
 
-configure_hostapd(){ step "Configure hostapd"; local conf=/etc/hostapd/hostapd.conf; local content="interface=wlan0\nssid=$SSID\ncountry_code=$COUNTRY\nhw_mode=g\nchannel=$CHANNEL\nieee80211n=1\nwmm_enabled=1\nwpa=2\nwpa_key_mgmt=WPA-PSK\nrsn_pairwise=CCMP\nwpa_passphrase=$PSK"; write_file "$conf" "$content"; append_if_missing "DAEMON_CONF=\"$conf\"" /etc/default/hostapd; success "hostapd configured"; }
+configure_hostapd(){ step "Configure hostapd"; local conf=/etc/hostapd/hostapd.conf; local content="interface=wlan0\nssid=$SSID\ncountry_code=$COUNTRY\nhw_mode=g\nchannel=$CHANNEL\nignore_broadcast_ssid=0\nieee80211n=1\nwmm_enabled=1\nwpa=2\nwpa_key_mgmt=WPA-PSK\nrsn_pairwise=CCMP\nwpa_passphrase=$PSK"; write_file "$conf" "$content"; append_if_missing "DAEMON_CONF=\"$conf\"" /etc/default/hostapd; success "hostapd configured"; }
 
 configure_dnsmasq(){ step "Configure dnsmasq"; local conf=/etc/dnsmasq.d/tor-ap.conf; local content="interface=wlan0\nbind-interfaces\ndhcp-range=10.10.0.50,10.10.0.200,255.255.255.0,12h\ndhcp-option=option:router,10.10.0.1\nport=0"; write_file "$conf" "$content"; success "dnsmasq configured"; }
 
