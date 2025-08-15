@@ -146,7 +146,7 @@ configure_firewall(){
   if [ "$FIREWALL_TOOL" = nftables ]; then
     local conf=/etc/nftables.conf
     local content
-    read -r -d '' content <<'EOF'
+    read -r -d '' content <<'EOF' || true
 table inet torap {
   chains {
     input {
@@ -177,7 +177,7 @@ EOF
   else
     local rules=/etc/iptables/rules.v4
     local content
-    read -r -d '' content <<'EOF'
+    read -r -d '' content <<'EOF' || true
 *nat
 :PREROUTING ACCEPT [0:0]
 :INPUT ACCEPT [0:0]
