@@ -17,7 +17,7 @@ NO_COLOR=0
 TOR_STATUS="UNKNOWN"
 AP_STATUS="UNKNOWN"
 
-TOTAL_STEPS=9
+TOTAL_STEPS=10
 CURRENT_STEP=0
 
 if [ -t 1 ]; then
@@ -115,21 +115,28 @@ preflight_checks(){
   [ "$OS_RELEASE" = bookworm ] && FIREWALL_TOOL="nftables" || FIREWALL_TOOL="iptables-nft"
   success "Preflight checks passed"
 }
+
+disable_conflicting_services(){
+  step "Disable network services"
+  local nm_conf=/etc/NetworkManager/NetworkManager.conf
+  local nm_content="[main]\nplugins=ifupdown,keyfile\n\n[ifupdown]\nmanaged=false\n"
+  write_file "$nm_conf" "$nm_content"
+  if [ "$DRY_RUN" -eq 0 ]; then
+    run_cmd systemctl disable --now NetworkManager 2>/dev/null || true
+    run_cmd systemctl disable --now wpa_supplicant 2>/dev/null || true
+    if command -v rfkill >/dev/null 2>&1; then
+      if rfkill list wlan0 2>/dev/null | grep -qi 'blocked'; then
+        run_cmd rfkill unblock wlan0
+      fi
+    fi
+  else
+    info "Would disable NetworkManager and wpa_supplicant and unblock wlan0"
+  fi
+}
 install_packages(){ step "Install packages"; local pkgs=(tor hostapd dnsmasq jq); if [ "$FIREWALL_TOOL" = "nftables" ]; then pkgs+=(nftables); else pkgs+=(iptables iptables-persistent netfilter-persistent); fi; if [ "$DRY_RUN" -eq 1 ]; then info "Would install: ${pkgs[*]}"; return; fi; run_cmd apt-get update -y; run_cmd apt-get install -y "${pkgs[@]}"; }
 
 configure_network(){
   step "Configure network"
-  if [ "$DRY_RUN" -eq 1 ]; then
-    info "Would disable NetworkManager and wpa_supplicant and unblock Wi-Fi"
-  else
-    if command -v nmcli >/dev/null 2>&1; then
-      run_cmd nmcli radio wifi off || true
-    fi
-    run_cmd systemctl stop wpa_supplicant 2>/dev/null || true
-    if command -v rfkill >/dev/null 2>&1; then
-      run_cmd rfkill unblock all
-    fi
-  fi
   if command -v iw >/dev/null 2>&1; then
     if [ "$DRY_RUN" -eq 1 ]; then
       info "Would set wlan0 to AP mode 🛜"
@@ -148,30 +155,9 @@ configure_network(){
   local sysctl_content="net.ipv4.ip_forward=1\nnet.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1"
   write_file "$sysctl_conf" "$sysctl_content"
   [ "$DRY_RUN" -eq 0 ] && run_cmd sysctl -p "$sysctl_conf"
-  if [ "$OS_RELEASE" = bookworm ]; then
-    local existing
-    existing=$(nmcli -t -f UUID,NAME c show 2>/dev/null | awk -F: '$2=="torap-wlan0"{print $1}')
-    if [ -n "$existing" ]; then
-      if [ "$DRY_RUN" -eq 1 ]; then
-        info "Would remove existing nmcli connection(s) torap-wlan0"
-      else
-        for uuid in $existing; do
-          run_cmd nmcli con delete "$uuid"
-        done
-      fi
-    fi
-    if [ "$DRY_RUN" -eq 1 ]; then
-      info "Would create nmcli connection torap-wlan0"
-    else
-      run_cmd nmcli con add type wifi ifname wlan0 con-name torap-wlan0 autoconnect yes ssid "$SSID"
-      run_cmd nmcli con modify torap-wlan0 802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel "$CHANNEL" ipv4.method manual ipv4.addresses "10.10.0.1/24" ipv4.gateway "" ipv4.dhcp-hostname "" ipv6.method ignore
-      run_cmd nmcli con modify torap-wlan0 wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PSK"
-    fi
-  else
-    append_if_missing "interface wlan0" /etc/dhcpcd.conf
-    append_if_missing "static ip_address=10.10.0.1/24" /etc/dhcpcd.conf
-    append_if_missing "nohook wpa_supplicant" /etc/dhcpcd.conf
-  fi
+  append_if_missing "interface wlan0" /etc/dhcpcd.conf
+  append_if_missing "static ip_address=10.10.0.1/24" /etc/dhcpcd.conf
+  append_if_missing "nohook wpa_supplicant" /etc/dhcpcd.conf
   success "Network configured"
 }
 
@@ -297,6 +283,6 @@ Use only on networks you control and in accordance with local laws.
 EOF
 }
 
-main(){ parse_args "$@"; print_banner; if [ "$REVERT" -eq 1 ]; then revert_changes; exit 0; fi; preflight_checks; install_packages; configure_network; configure_hostapd; configure_dnsmasq; configure_tor; configure_firewall; enable_services; verify_setup; summary; }
+main(){ parse_args "$@"; print_banner; if [ "$REVERT" -eq 1 ]; then revert_changes; exit 0; fi; preflight_checks; disable_conflicting_services; install_packages; configure_network; configure_hostapd; configure_dnsmasq; configure_tor; configure_firewall; enable_services; verify_setup; summary; }
 
 main "$@"
