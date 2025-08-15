@@ -130,6 +130,13 @@ configure_network(){
       run_cmd rfkill unblock all
     fi
   fi
+  if command -v iw >/dev/null 2>&1; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "Would set wlan0 to AP mode 🛜"
+    else
+      run_cmd iw dev wlan0 set type __ap || true
+    fi
+  fi
   if command -v raspi-config >/dev/null; then
     if [ "$DRY_RUN" -eq 1 ]; then
       info "Would set Wi-Fi country to $COUNTRY"
@@ -255,6 +262,13 @@ verify_setup(){
   else
     TOR_STATUS="FAIL"
     warn "Tor network check failed"
+  fi
+
+  info "Checking wlan0 mode 🔍"
+  if command -v iw >/dev/null 2>&1 && iw dev wlan0 info 2>/dev/null | grep -q 'type AP'; then
+    success "wlan0 is in AP mode 🛜"
+  else
+    warn "wlan0 is not in AP mode ⚠️"
   fi
 
   info "Checking if AP \"$SSID\" is broadcasting 📡"
