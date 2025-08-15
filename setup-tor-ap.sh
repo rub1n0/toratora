@@ -158,6 +158,7 @@ configure_network(){
   append_if_missing "interface wlan0" /etc/dhcpcd.conf
   append_if_missing "static ip_address=10.10.0.1/24" /etc/dhcpcd.conf
   append_if_missing "nohook wpa_supplicant" /etc/dhcpcd.conf
+  [ "$DRY_RUN" -eq 0 ] && run_cmd systemctl restart dhcpcd
   success "Network configured"
 }
 
@@ -230,7 +231,7 @@ EOF
   success "Firewall configured"
 }
 
-enable_services(){ step "Enable services"; [ "$DRY_RUN" -eq 1 ] && { info "Would enable services"; return; }; if [ "$FIREWALL_TOOL" = nftables ]; then run_cmd systemctl enable nftables; run_cmd systemctl start nftables; else run_cmd systemctl enable netfilter-persistent; run_cmd systemctl start netfilter-persistent; fi; run_cmd systemctl enable dnsmasq; run_cmd systemctl enable tor; run_cmd systemctl enable hostapd; run_cmd systemctl start dnsmasq; run_cmd systemctl start tor; run_cmd systemctl start hostapd; success "Services enabled"; }
+enable_services(){ step "Enable services"; [ "$DRY_RUN" -eq 1 ] && { info "Would enable services"; return; }; if [ "$FIREWALL_TOOL" = nftables ]; then run_cmd systemctl enable nftables; run_cmd systemctl start nftables; else run_cmd systemctl enable netfilter-persistent; run_cmd systemctl start netfilter-persistent; fi; run_cmd systemctl enable dnsmasq; run_cmd systemctl enable tor; run_cmd systemctl enable hostapd; run_cmd systemctl start hostapd; run_cmd systemctl start dnsmasq; run_cmd systemctl start tor; success "Services enabled"; }
 
 verify_setup(){
   step "Verify setup"
