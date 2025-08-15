@@ -27,7 +27,7 @@ graph TD
 
 ## Quick start
 ```bash
-curl -L https://example.com/setup-tor-ap.sh -o setup-tor-ap.sh
+curl -L https://raw.githubusercontent.com/rub1n0/toratora/refs/heads/main/setup-tor-ap.sh -o setup-tor-ap.sh
 sudo bash setup-tor-ap.sh --ssid toratora --psk "YourStrongPass" --country US --subnet 10.10.0.0/24 --channel 6
 ```
 Expected banner:
