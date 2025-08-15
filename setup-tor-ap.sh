@@ -54,14 +54,23 @@ parse_args(){ while [[ $# -gt 0 ]]; do case "$1" in --ssid) SSID="$2"; shift 2;;
 
 backup_file(){
   local f="$1"
-  [ -f "$f" ] && {
-    # Remove any existing backups from previous runs to avoid service conflicts
-    rm -f "${f}.toratora.bak."* "${f}.toratora."*.bak 2>/dev/null || true
-    local b
-    b="${f}.toratora.$(date +%Y%m%d%H%M%S).bak"
-    cp "$f" "$b"
-    BACKUPS+=("$b")
-  }
+  [ -f "$f" ] || return
+
+  local backup_dir="/var/backups/toratora"
+  mkdir -p "$backup_dir"
+
+  # Use a sanitized filename to store the backup outside of service config dirs
+  local base
+  base="${f//\//_}"
+
+  # Remove previous backups for this file to avoid accumulation
+  rm -f "$backup_dir/${base}.toratora."*.bak 2>/dev/null || true
+
+  local ts
+  ts=$(date +%Y%m%d%H%M%S)
+  local b="$backup_dir/${base}.toratora.${ts}.bak"
+  cp "$f" "$b"
+  BACKUPS+=("$f:$b")
 }
 write_file(){ local p="$1"; local c="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would write $p"; return; }; backup_file "$p"; printf "%b" "$c" > "$p"; }
 append_if_missing(){ local l="$1" f="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would ensure line in $f: $l"; return; }; grep -qxF "$l" "$f" 2>/dev/null || echo "$l" >> "$f"; }
@@ -69,10 +78,10 @@ append_if_missing(){ local l="$1" f="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would 
 BACKUPS=()
 
 revert_changes(){
-  warn "Reverting configuration...";
-  for b in "${BACKUPS[@]}"; do
-    local o="${b%.toratora.*.bak}"
-    [ -f "$b" ] && mv "$b" "$o"
+  warn "Reverting configuration..."
+  for pair in "${BACKUPS[@]}"; do
+    IFS=: read -r orig backup <<< "$pair"
+    [ -f "$backup" ] && mv "$backup" "$orig"
   done
   systemctl disable --now hostapd dnsmasq tor nftables 2>/dev/null || true
   success "Revert complete"

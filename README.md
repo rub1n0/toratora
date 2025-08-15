@@ -62,7 +62,7 @@ Expected banner:
   * `/etc/tor/torrc`
   * `/etc/nftables.conf` or `/etc/iptables/rules.v4`
 * Enables services: `nftables`/`netfilter-persistent`, `dnsmasq`, `tor`, `hostapd`.
-* All modified files are backed up with a `.toratora.bak.*` suffix.
+* All modified files are backed up to `/var/backups/toratora` with a `.toratora.<timestamp>.bak` suffix.
 
 ## Validation
 1. Ensure the AP is up:
