@@ -55,8 +55,10 @@ parse_args(){ while [[ $# -gt 0 ]]; do case "$1" in --ssid) SSID="$2"; shift 2;;
 backup_file(){
   local f="$1"
   [ -f "$f" ] && {
+    # Remove any existing backups from previous runs to avoid service conflicts
+    rm -f "${f}.toratora.bak."* "${f}.toratora."*.bak 2>/dev/null || true
     local b
-    b="${f}.toratora.bak.$(date +%Y%m%d%H%M%S)"
+    b="${f}.toratora.$(date +%Y%m%d%H%M%S).bak"
     cp "$f" "$b"
     BACKUPS+=("$b")
   }
@@ -66,7 +68,15 @@ append_if_missing(){ local l="$1" f="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would 
 
 BACKUPS=()
 
-revert_changes(){ warn "Reverting configuration..."; for b in "${BACKUPS[@]}"; do local o="${b%.toratora.bak.*}"; [ -f "$b" ] && mv "$b" "$o"; done; systemctl disable --now hostapd dnsmasq tor nftables 2>/dev/null || true; success "Revert complete"; }
+revert_changes(){
+  warn "Reverting configuration...";
+  for b in "${BACKUPS[@]}"; do
+    local o="${b%.toratora.*.bak}"
+    [ -f "$b" ] && mv "$b" "$o"
+  done
+  systemctl disable --now hostapd dnsmasq tor nftables 2>/dev/null || true
+  success "Revert complete"
+}
 
 print_banner(){ [ "$QUIET" -eq 1 ] && return; cat <<'BANNER'
  _____              _____
