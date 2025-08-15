@@ -109,9 +109,18 @@ configure_network(){
   write_file "$sysctl_conf" "$sysctl_content"
   [ "$DRY_RUN" -eq 0 ] && run_cmd sysctl -p "$sysctl_conf"
   if [ "$OS_RELEASE" = bookworm ]; then
-    if nmcli -t -f NAME c show torap-wlan0 >/dev/null 2>&1; then
-      :
-    elif [ "$DRY_RUN" -eq 1 ]; then
+    local existing
+    existing=$(nmcli -t -f UUID,NAME c show 2>/dev/null | awk -F: '$2=="torap-wlan0"{print $1}')
+    if [ -n "$existing" ]; then
+      if [ "$DRY_RUN" -eq 1 ]; then
+        info "Would remove existing nmcli connection(s) torap-wlan0"
+      else
+        for uuid in $existing; do
+          run_cmd nmcli con delete "$uuid"
+        done
+      fi
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
       info "Would create nmcli connection torap-wlan0"
     else
       run_cmd nmcli con add type wifi ifname wlan0 con-name torap-wlan0 autoconnect yes ssid "$SSID"
