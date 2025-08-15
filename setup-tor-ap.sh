@@ -14,7 +14,10 @@ REVERT=0
 QUIET=0
 NO_COLOR=0
 
-TOTAL_STEPS=10
+TOR_STATUS="UNKNOWN"
+AP_STATUS="UNKNOWN"
+
+TOTAL_STEPS=9
 CURRENT_STEP=0
 
 if [ -t 1 ]; then
@@ -225,21 +228,50 @@ EOF
 
 enable_services(){ step "Enable services"; [ "$DRY_RUN" -eq 1 ] && { info "Would enable services"; return; }; if [ "$FIREWALL_TOOL" = nftables ]; then run_cmd systemctl enable nftables; run_cmd systemctl start nftables; else run_cmd systemctl enable netfilter-persistent; run_cmd systemctl start netfilter-persistent; fi; run_cmd systemctl enable dnsmasq; run_cmd systemctl enable tor; run_cmd systemctl enable hostapd; run_cmd systemctl start dnsmasq; run_cmd systemctl start tor; run_cmd systemctl start hostapd; success "Services enabled"; }
 
+verify_setup(){
+  step "Verify setup"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    TOR_STATUS="SKIPPED"
+    AP_STATUS="SKIPPED"
+    info "Would check Tor connectivity and AP broadcast"
+    return
+  fi
+
+  info "Checking Tor network connection ✨"
+  if curl -s --socks5-hostname 127.0.0.1:9050 https://check.torproject.org/api/ip | grep -q '"IsTor"[[:space:]]*:[[:space:]]*true'; then
+    TOR_STATUS="OK"
+    success "Tor network reachable 🌎"
+  else
+    TOR_STATUS="FAIL"
+    warn "Tor network check failed"
+  fi
+
+  info "Checking if AP \"$SSID\" is broadcasting 📡"
+  if command -v iw >/dev/null 2>&1 && iw dev wlan0 info 2>/dev/null | grep -q "ssid $SSID"; then
+    AP_STATUS="OK"
+    success "Access Point \"$SSID\" is live 🎉"
+  else
+    AP_STATUS="FAIL"
+    warn "Access Point \"$SSID\" not found"
+  fi
+}
+
 summary(){ cat <<EOF
 
 ═════════════════════════════════════════════════════════════
-  ✅ Setup Complete                                          
+  🎉 Setup Complete 🎉
 ═════════════════════════════════════════════════════════════
  SSID: $SSID
  Subnet: $SUBNET
  Firewall: $FIREWALL_TOOL
  Services: hostapd, dnsmasq, tor
- Verify: torsocks curl https://check.torproject.org/api/ip
+ Tor: $TOR_STATUS
+ AP Broadcast: $AP_STATUS
 ═════════════════════════════════════════════════════════════
 Use only on networks you control and in accordance with local laws.
 EOF
 }
 
-main(){ parse_args "$@"; print_banner; if [ "$REVERT" -eq 1 ]; then revert_changes; exit 0; fi; preflight_checks; install_packages; configure_network; configure_hostapd; configure_dnsmasq; configure_tor; configure_firewall; enable_services; summary; }
+main(){ parse_args "$@"; print_banner; if [ "$REVERT" -eq 1 ]; then revert_changes; exit 0; fi; preflight_checks; install_packages; configure_network; configure_hostapd; configure_dnsmasq; configure_tor; configure_firewall; enable_services; verify_setup; summary; }
 
 main "$@"
