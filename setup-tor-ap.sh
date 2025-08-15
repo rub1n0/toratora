@@ -227,15 +227,15 @@ enable_services(){ step "Enable services"; [ "$DRY_RUN" -eq 1 ] && { info "Would
 
 summary(){ cat <<EOF
 
-╔════════════════════════════════════╗
-║  ✅ Setup Complete                  ║
-╠════════════════════════════════════╣
-║ SSID: $SSID
-║ Subnet: $SUBNET
-║ Firewall: $FIREWALL_TOOL
-║ Services: hostapd, dnsmasq, tor
-║ Verify: torsocks curl https://check.torproject.org/api/ip
-╚════════════════════════════════════╝
+═════════════════════════════════════════════════════════════
+  ✅ Setup Complete                                          
+═════════════════════════════════════════════════════════════
+ SSID: $SSID
+ Subnet: $SUBNET
+ Firewall: $FIREWALL_TOOL
+ Services: hostapd, dnsmasq, tor
+ Verify: torsocks curl https://check.torproject.org/api/ip
+═════════════════════════════════════════════════════════════
 Use only on networks you control and in accordance with local laws.
 EOF
 }
