@@ -119,6 +119,17 @@ install_packages(){ step "Install packages"; local pkgs=(tor hostapd dnsmasq jq)
 
 configure_network(){
   step "Configure network"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "Would disable NetworkManager and wpa_supplicant and unblock Wi-Fi"
+  else
+    if command -v nmcli >/dev/null 2>&1; then
+      run_cmd nmcli radio wifi off || true
+    fi
+    run_cmd systemctl stop wpa_supplicant 2>/dev/null || true
+    if command -v rfkill >/dev/null 2>&1; then
+      run_cmd rfkill unblock all
+    fi
+  fi
   if command -v raspi-config >/dev/null; then
     if [ "$DRY_RUN" -eq 1 ]; then
       info "Would set Wi-Fi country to $COUNTRY"
