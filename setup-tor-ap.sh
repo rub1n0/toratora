@@ -148,27 +148,25 @@ configure_firewall(){
     local content
     read -r -d '' content <<'EOF' || true
 table inet torap {
-  chains {
-    input {
-      type filter hook input priority 0;
-      ct state established,related accept
-      iif lo accept
-      iifname "wlan0" udp dport {67,68} accept
-      iifname "wlan0" tcp dport 9040 accept
-      iifname "wlan0" udp dport 9053 accept
-      counter drop
-    }
-    prerouting {
-      type nat hook prerouting priority -100;
-      iifname "wlan0" meta skuid != debian-tor tcp redirect to :9040
-      iifname "wlan0" udp dport 53 redirect to :9053
-    }
-    output {
-      type filter hook output priority 0;
-      ct state established,related accept
-      meta skuid debian-tor accept
-      accept
-    }
+  chain input {
+    type filter hook input priority 0;
+    ct state established,related accept
+    iif lo accept
+    iifname "wlan0" udp dport {67,68} accept
+    iifname "wlan0" tcp dport 9040 accept
+    iifname "wlan0" udp dport 9053 accept
+    counter drop
+  }
+  chain prerouting {
+    type nat hook prerouting priority -100;
+    iifname "wlan0" meta skuid != debian-tor meta l4proto tcp redirect to :9040
+    iifname "wlan0" udp dport 53 redirect to :9053
+  }
+  chain output {
+    type filter hook output priority 0;
+    ct state established,related accept
+    meta skuid debian-tor accept
+    accept
   }
 }
 EOF
