@@ -52,8 +52,16 @@ exit 1; }
 
 parse_args(){ while [[ $# -gt 0 ]]; do case "$1" in --ssid) SSID="$2"; shift 2;; --psk) PSK="$2"; shift 2;; --country) COUNTRY="$2"; shift 2;; --subnet) SUBNET="$2"; shift 2;; --channel) CHANNEL="$2"; shift 2;; --dry-run) DRY_RUN=1; shift;; --revert) REVERT=1; shift;; --quiet) QUIET=1; shift;; --no-color) NO_COLOR=1; shift;; -h|--help) usage;; *) error "Unknown argument: $1"; usage;; esac; done; if [ -z "$PSK" ] && [ "$REVERT" -eq 0 ]; then read -rp "Enter WPA2 passphrase (min 12 chars): " PSK; fi; if [ ${#PSK} -lt 12 ] && [ "$REVERT" -eq 0 ]; then error "Passphrase must be at least 12 characters"; exit 1; fi; }
 
-backup_file(){ local f="$1"; [ -f "$f" ] && { local b="${f}.toratora.bak.$(date +%Y%m%d%H%M%S)"; cp "$f" "$b"; BACKUPS+=("$b"); }; }
-write_file(){ local p="$1"; local c="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would write $p"; return; }; backup_file "$p"; printf "%s" "$c" > "$p"; }
+backup_file(){
+  local f="$1"
+  [ -f "$f" ] && {
+    local b
+    b="${f}.toratora.bak.$(date +%Y%m%d%H%M%S)"
+    cp "$f" "$b"
+    BACKUPS+=("$b")
+  }
+}
+write_file(){ local p="$1"; local c="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would write $p"; return; }; backup_file "$p"; printf "%b" "$c" > "$p"; }
 append_if_missing(){ local l="$1" f="$2"; [ "$DRY_RUN" -eq 1 ] && { info "Would ensure line in $f: $l"; return; }; grep -qxF "$l" "$f" 2>/dev/null || echo "$l" >> "$f"; }
 
 BACKUPS=()
@@ -70,7 +78,21 @@ print_banner(){ [ "$QUIET" -eq 1 ] && return; cat <<'BANNER'
 BANNER
 }
 
-preflight_checks(){ step "Preflight checks"; [ "$EUID" -ne 0 ] && { error "Run as root"; exit 1; }; systemd-detect-virt --quiet && { error "Virtual environment detected"; exit 1; }; grep -qi 'Raspberry Pi' /proc/device-tree/model || { error "Not a Raspberry Pi"; exit 1; }; ip link show eth0 >/dev/null 2>&1 || { error "eth0 missing"; exit 1; }; ip link show wlan0 >/dev/null 2>&1 || { error "wlan0 missing"; exit 1; }; ip link show eth0 | grep -q "state UP" || { error "eth0 down"; exit 1; }; curl -s --head https://check.torproject.org >/dev/null || { error "No Internet connectivity on eth0"; exit 1; }; . /etc/os-release; OS_RELEASE="$VERSION_CODENAME"; [ "$OS_RELEASE" = bookworm ] && FIREWALL_TOOL="nftables" || FIREWALL_TOOL="iptables-nft"; success "Preflight checks passed"; }
+preflight_checks(){
+  step "Preflight checks"
+  [ "$EUID" -ne 0 ] && { error "Run as root"; exit 1; }
+  systemd-detect-virt --quiet && { error "Virtual environment detected"; exit 1; }
+  grep -qi 'Raspberry Pi' /proc/device-tree/model || { error "Not a Raspberry Pi"; exit 1; }
+  ip link show eth0 >/dev/null 2>&1 || { error "eth0 missing"; exit 1; }
+  ip link show wlan0 >/dev/null 2>&1 || { error "wlan0 missing"; exit 1; }
+  ip link show eth0 | grep -q "state UP" || { error "eth0 down"; exit 1; }
+  curl -s --head https://check.torproject.org >/dev/null || { error "No Internet connectivity on eth0"; exit 1; }
+  # shellcheck source=/dev/null
+  . /etc/os-release
+  OS_RELEASE="$VERSION_CODENAME"
+  [ "$OS_RELEASE" = bookworm ] && FIREWALL_TOOL="nftables" || FIREWALL_TOOL="iptables-nft"
+  success "Preflight checks passed"
+}
 install_packages(){ step "Install packages"; local pkgs=(tor hostapd dnsmasq jq); if [ "$FIREWALL_TOOL" = "nftables" ]; then pkgs+=(nftables); else pkgs+=(iptables iptables-persistent netfilter-persistent); fi; if [ "$DRY_RUN" -eq 1 ]; then info "Would install: ${pkgs[*]}"; return; fi; run_cmd apt-get update -y; run_cmd apt-get install -y "${pkgs[@]}"; }
 
 configure_network(){
@@ -83,8 +105,7 @@ configure_network(){
     fi
   fi
   local sysctl_conf=/etc/sysctl.d/99-tor-ap.conf
-  local sysctl_content="net.ipv4.ip_forward=1"
-  local sysctl_content="net.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1"
+  local sysctl_content="net.ipv4.ip_forward=1\nnet.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1"
   write_file "$sysctl_conf" "$sysctl_content"
   [ "$DRY_RUN" -eq 0 ] && run_cmd sysctl -p "$sysctl_conf"
   if [ "$OS_RELEASE" = bookworm ]; then
@@ -111,7 +132,70 @@ configure_dnsmasq(){ step "Configure dnsmasq"; local conf=/etc/dnsmasq.d/tor-ap.
 
 configure_tor(){ step "Configure Tor"; local conf=/etc/tor/torrc; local content="Log notice syslog\nUser debian-tor\nDataDirectory /var/lib/tor\nAutomapHostsOnResolve 1\nVirtualAddrNetworkIPv4 10.192.0.0/10\nTransPort 9040\nDNSPort 9053\nAvoidDiskWrites 1"; write_file "$conf" "$content"; success "Tor configured"; }
 
-configure_firewall(){ step "Configure firewall"; if [ "$FIREWALL_TOOL" = nftables ]; then local conf=/etc/nftables.conf; local content="table inet torap {\n  chains {\n    input {\n      type filter hook input priority 0;\n      ct state established,related accept\n      iif lo accept\n      iifname \\\"wlan0\\\" udp dport {67,68} accept\n      iifname \\\"wlan0\\\" tcp dport 9040 accept\n      iifname \\\"wlan0\\\" udp dport 9053 accept\n      counter drop\n    }\n    prerouting {\n      type nat hook prerouting priority -100;\n      iifname \\\"wlan0\\\" meta skuid != debian-tor tcp redirect to :9040\n      iifname \\\"wlan0\\\" udp dport 53 redirect to :9053\n    }\n    output {\n      type filter hook output priority 0;\n      ct state established,related accept\n      meta skuid debian-tor accept\n      accept\n    }\n  }\n}"; write_file "$conf" "$content"; [ "$DRY_RUN" -eq 0 ] && { run_cmd systemctl enable nftables; run_cmd nft -f "$conf"; }; else local rules=/etc/iptables/rules.v4; local content="*nat\n:PREROUTING ACCEPT [0:0]\n:INPUT ACCEPT [0:0]\n:OUTPUT ACCEPT [0:0]\n:POSTROUTING ACCEPT [0:0]\n-A PREROUTING -i wlan0 -p tcp -m owner ! --uid-owner debian-tor -j REDIRECT --to-ports 9040\n-A PREROUTING -i wlan0 -p udp --dport 53 -j REDIRECT --to-ports 9053\nCOMMIT\n*filter\n:INPUT DROP [0:0]\n:FORWARD DROP [0:0]\n:OUTPUT ACCEPT [0:0]\n-A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\n-A INPUT -i lo -j ACCEPT\n-A INPUT -i wlan0 -p udp --dport 67:68 -j ACCEPT\n-A INPUT -i wlan0 -p tcp --dport 9040 -j ACCEPT\n-A INPUT -i wlan0 -p udp --dport 9053 -j ACCEPT\n-A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\n-A OUTPUT -m owner --uid-owner debian-tor -j ACCEPT\n-A OUTPUT -j ACCEPT\nCOMMIT"; write_file "$rules" "$content"; [ "$DRY_RUN" -eq 0 ] && { run_cmd systemctl enable netfilter-persistent; run_cmd netfilter-persistent save; }; fi; success "Firewall configured"; }
+configure_firewall(){
+  step "Configure firewall"
+  if [ "$FIREWALL_TOOL" = nftables ]; then
+    local conf=/etc/nftables.conf
+    local content
+    read -r -d '' content <<'EOF'
+table inet torap {
+  chains {
+    input {
+      type filter hook input priority 0;
+      ct state established,related accept
+      iif lo accept
+      iifname "wlan0" udp dport {67,68} accept
+      iifname "wlan0" tcp dport 9040 accept
+      iifname "wlan0" udp dport 9053 accept
+      counter drop
+    }
+    prerouting {
+      type nat hook prerouting priority -100;
+      iifname "wlan0" meta skuid != debian-tor tcp redirect to :9040
+      iifname "wlan0" udp dport 53 redirect to :9053
+    }
+    output {
+      type filter hook output priority 0;
+      ct state established,related accept
+      meta skuid debian-tor accept
+      accept
+    }
+  }
+}
+EOF
+    write_file "$conf" "$content"
+    [ "$DRY_RUN" -eq 0 ] && { run_cmd systemctl enable nftables; run_cmd nft -f "$conf"; }
+  else
+    local rules=/etc/iptables/rules.v4
+    local content
+    read -r -d '' content <<'EOF'
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+-A PREROUTING -i wlan0 -p tcp -m owner ! --uid-owner debian-tor -j REDIRECT --to-ports 9040
+-A PREROUTING -i wlan0 -p udp --dport 53 -j REDIRECT --to-ports 9053
+COMMIT
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -i wlan0 -p udp --dport 67:68 -j ACCEPT
+-A INPUT -i wlan0 -p tcp --dport 9040 -j ACCEPT
+-A INPUT -i wlan0 -p udp --dport 9053 -j ACCEPT
+-A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -m owner --uid-owner debian-tor -j ACCEPT
+-A OUTPUT -j ACCEPT
+COMMIT
+EOF
+    write_file "$rules" "$content"
+    [ "$DRY_RUN" -eq 0 ] && { run_cmd systemctl enable netfilter-persistent; run_cmd netfilter-persistent save; }
+  fi
+  success "Firewall configured"
+}
 
 enable_services(){ step "Enable services"; [ "$DRY_RUN" -eq 1 ] && { info "Would enable services"; return; }; if [ "$FIREWALL_TOOL" = nftables ]; then run_cmd systemctl enable nftables; run_cmd systemctl start nftables; else run_cmd systemctl enable netfilter-persistent; run_cmd systemctl start netfilter-persistent; fi; run_cmd systemctl enable dnsmasq; run_cmd systemctl enable tor; run_cmd systemctl enable hostapd; run_cmd systemctl start dnsmasq; run_cmd systemctl start tor; run_cmd systemctl start hostapd; success "Services enabled"; }
 
