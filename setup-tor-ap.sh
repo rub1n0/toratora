@@ -83,7 +83,8 @@ configure_network(){
     fi
   fi
   local sysctl_conf=/etc/sysctl.d/99-tor-ap.conf
-  local sysctl_content="net.ipv4.ip_forward=1\nnet.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1"
+  local sysctl_content="net.ipv4.ip_forward=1"
+  local sysctl_content="net.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1"
   write_file "$sysctl_conf" "$sysctl_content"
   [ "$DRY_RUN" -eq 0 ] && run_cmd sysctl -p "$sysctl_conf"
   if [ "$OS_RELEASE" = bookworm ]; then
