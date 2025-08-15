@@ -96,7 +96,7 @@ print_banner(){ [ "$QUIET" -eq 1 ] && return; cat <<'BANNER'
   | |/ _ \| '__/ _` || |/ _ \| '__/ _` |
   | | (_) | | | (_| || | (_) | | | (_| |
   |_|\___/|_|  \__,_||_|\___/|_|  \__,_|
-      ToraTora - Tor Wi-Fi Access Point installer
+ ToraTora - Tor Wi-Fi Access Point installer
 BANNER
 }
 
