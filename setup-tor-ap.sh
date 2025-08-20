@@ -100,7 +100,8 @@ run_cmd() {
   local spin_pid=$!
   wait $cmd_pid
   local status=$?
-  kill $spin_pid 2>/dev/null; wait $spin_pid 2>/dev/null
+  kill $spin_pid 2>/dev/null || true
+  wait $spin_pid 2>/dev/null || true
   if ((status)); then
     alert "Command failed: $*"
     return 1
