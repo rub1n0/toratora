@@ -148,6 +148,14 @@ iptables_rule() {
   fi
 }
 
+remove_tor_iptables() {
+  iptables_unrule "-t nat -D PREROUTING -i ${AP_IFACE} -p tcp --dport 22 -j REDIRECT --to-ports 22"
+  iptables_unrule "-t nat -D PREROUTING -i ${AP_IFACE} -p udp --dport 53 -j REDIRECT --to-ports ${TOR_DNS_PORT}"
+  iptables_unrule "-t nat -D PREROUTING -i ${AP_IFACE} -p tcp --syn -j REDIRECT --to-ports ${TOR_TRANS_PORT}"
+  run_cmd "iptables-save > /etc/iptables/rules.v4"
+  [[ -f /etc/iptables.ipv4.nat ]] && run_cmd "iptables-save > /etc/iptables.ipv4.nat"
+}
+
 start_services() {
   run_cmd "systemctl enable --now tor"
   for i in {1..30}; do
@@ -157,6 +165,10 @@ start_services() {
     fi
     sleep 1
   done
+  if ! systemctl is-active --quiet tor; then
+    echo "Tor service inactive; removing Tor NAT rules."
+    remove_tor_iptables
+  fi
 }
 
 summary() {
