@@ -146,22 +146,6 @@ install_packages(){ step "Install packages"; local pkgs=(tor hostapd dnsmasq jq)
 
 configure_network(){
   step "Configure network"
-  if command -v iw >/dev/null 2>&1; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-      info "Would set wlan0 to AP mode 🛜"
-    else
-      run_cmd iw dev wlan0 set type __ap || true
-    fi
-  fi
-  if command -v raspi-config >/dev/null; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-      info "Would set Wi-Fi country to $COUNTRY"
-    else
-      if ! run_cmd raspi-config nonint do_wifi_country "$COUNTRY"; then
-        warn "Failed to set Wi-Fi country to $COUNTRY"
-      fi
-    fi
-  fi
   local sysctl_conf=/etc/sysctl.d/99-tor-ap.conf
   local sysctl_content="net.ipv4.ip_forward=1\nnet.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1"
   write_file "$sysctl_conf" "$sysctl_content"
