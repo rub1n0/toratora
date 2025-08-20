@@ -124,7 +124,6 @@ After setup completes, the script automatically checks that the hotspot, Tor ser
 - On a client connected to the AP:
   - DNS queries resolve.
   - `curl https://check.torproject.org/` shows Tor usage.
-  - Optionally on the Pi: `torify curl ifconfig.me` returns a Tor exit IP.
 
 ## Troubleshooting
 - **Tor bind errors**: ensure the hotspot is up before Tor starts; the script retries for 30s.
