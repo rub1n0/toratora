@@ -59,6 +59,7 @@ check_bookworm() {
 
 ensure_packages() {
   local packages=(tor iptables iptables-persistent qrencode network-manager)
+  local IFS=' '
   run_cmd "apt-get update"
   run_cmd "apt-get -y upgrade"
   run_cmd "apt-get -y install ${packages[*]}"
