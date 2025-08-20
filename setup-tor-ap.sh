@@ -158,7 +158,13 @@ configure_network(){
   append_if_missing "interface wlan0" /etc/dhcpcd.conf
   append_if_missing "static ip_address=10.10.0.1/24" /etc/dhcpcd.conf
   append_if_missing "nohook wpa_supplicant" /etc/dhcpcd.conf
-  [ "$DRY_RUN" -eq 0 ] && run_cmd systemctl restart dhcpcd
+  if [ "$DRY_RUN" -eq 0 ]; then
+    if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
+      run_cmd systemctl restart dhcpcd || true
+    else
+      warn "dhcpcd.service not found, skipping restart"
+    fi
+  fi
   success "Network configured"
 }
 
