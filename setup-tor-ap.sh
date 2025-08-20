@@ -8,6 +8,38 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 #===========================
+# Retro console formatting
+GREEN="\e[32m"
+RED="\e[31m"
+AMBER="\e[33m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+BLINK="\e[5m"
+RESET="\e[0m"
+
+timestamp() { date "+%H:%M:%S"; }
+
+divider() { printf "${CYAN}▓▒░$(printf '%0.s─' {1..60})░▒▓${RESET}\n"; }
+
+info() { printf "${GREEN}${BOLD}[%s] SYS/4829.CTRL:%s${RESET}\n" "$(timestamp)" " $*"; }
+warn() { printf "${AMBER}${BOLD}[%s] SYS/4829.STAT:%s${RESET}\n" "$(timestamp)" " $*"; }
+alert() { printf "${RED}${BOLD}${BLINK}[%s] SYS/4829.ALERT:%s !!!${RESET}\n" "$(timestamp)" " $*" >&2; }
+
+banner() {
+  echo -e "${GREEN}${BOLD}"
+  cat <<'EOF'
+ ████████╗ ██████╗ ██████╗  █████╗ ████████╗ ██████╗ ██████╗  █████╗ 
+ ╚══██╔══╝██╔═══██╗██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗██╔══██╗
+    ██║   ██║   ██║██████╔╝███████║   ██║   ██║   ██║██████╔╝███████║
+    ██║   ██║   ██║██╔══██╗██╔══██║   ██║   ██║   ██║██╔══██╗██╔══██║
+    ██║   ╚██████╔╝██║  ██║██║  ██║   ██║   ╚██████╔╝██║  ██║██║  ██║
+    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
+EOF
+  echo -e "${RESET}${AMBER}${BOLD}>>> INITIALIZING SECURE NODE LINK <<<${RESET}"
+  divider
+}
+
+#===========================
 # Configuration (override via environment except SSID)
 AP_IFACE=${AP_IFACE:-wlan0}
 WAN_IFACE=${WAN_IFACE:-eth0}
@@ -36,33 +68,49 @@ while [[ $# -gt 0 ]]; do
         PSK=$1
         shift
       else
-        echo "Unknown option: $1" >&2
-        exit 1
+        alert "Unknown option: $1"; exit 1
       fi
       ;;
   esac
 done
 
 if (( ! UNINSTALL )) && [[ -z $PSK ]]; then
-  echo "Usage: $0 [--dry-run] [--uninstall] <psk>" >&2
-  exit 1
+  alert "Usage: $0 [--dry-run] [--uninstall] <psk>"; exit 1
 fi
 
+spinner() {
+  local pid=$1
+  local spin='|/-\\'
+  local i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    printf "\r${CYAN}${BOLD}[DECRYPTING %s]${RESET}" "${spin:i++%${#spin}:1}"
+    sleep 0.1
+  done
+  printf "\r\033[K"
+}
+
 run_cmd() {
-  echo "+ $*"
+  warn "+ $* [BEEP]"
   if ((DRY_RUN)); then
-    return 0
+    warn "[DRY-RUN] Command skipped"; return 0
   fi
-  if ! eval "$@"; then
-    echo "Command failed: $*" >&2
+  eval "$@" &
+  local cmd_pid=$!
+  spinner $cmd_pid &
+  local spin_pid=$!
+  wait $cmd_pid
+  local status=$?
+  kill $spin_pid 2>/dev/null; wait $spin_pid 2>/dev/null
+  if ((status)); then
+    alert "Command failed: $*"
     return 1
   fi
+  info "[CONNECTION ESTABLISHED]"
 }
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
-    echo "This script must be run as root" >&2
-    exit 1
+    alert "This script must be run as root"; exit 1
   fi
 }
 
@@ -70,12 +118,10 @@ check_bookworm() {
   if [[ -f /etc/os-release ]]; then
     . /etc/os-release
     if [[ ${VERSION_CODENAME:-} != "bookworm" ]]; then
-      echo "This script supports Raspberry Pi OS Bookworm only" >&2
-      exit 1
+      alert "This script supports Raspberry Pi OS Bookworm only"; exit 1
     fi
   else
-    echo "/etc/os-release not found" >&2
-    exit 1
+    alert "/etc/os-release not found"; exit 1
   fi
 }
 
@@ -99,8 +145,7 @@ ensure_sysctl() {
 
 ensure_hotspot() {
   if ! ip link show "$AP_IFACE" &>/dev/null; then
-    echo "Interface $AP_IFACE not found" >&2
-    exit 1
+    alert "Interface $AP_IFACE not found"; exit 1
   fi
   local con_name="tor-ap"
   if ! nmcli -t -f NAME connection show | grep -Fxq "$con_name"; then
@@ -111,7 +156,7 @@ ensure_hotspot() {
   run_cmd "nmcli connection modify '$con_name' ipv4.addresses '$AP_GATEWAY/24' ipv4.method shared ipv4.gateway '$AP_GATEWAY'"
   run_cmd "nmcli connection up '$con_name'"
   if command -v qrencode &>/dev/null; then
-    echo "Hotspot QR code:"; qrencode -t ansiutf8 "WIFI:S:${SSID};T:WPA;P:${PSK};;" || true
+    info "Hotspot QR code:"; qrencode -t ansiutf8 "WIFI:S:${SSID};T:WPA;P:${PSK};;" || true
   fi
 }
 
@@ -141,12 +186,12 @@ ensure_iptables() {
   iptables_rule "-t nat -A PREROUTING -i ${AP_IFACE} -p udp --dport 53 -j REDIRECT --to-ports ${TOR_DNS_PORT}"
   iptables_rule "-t nat -A PREROUTING -i ${AP_IFACE} -p tcp --syn -j REDIRECT --to-ports ${TOR_TRANS_PORT}"
   if ! run_cmd "iptables-save > /etc/iptables/rules.v4"; then
-    echo "Failed to save iptables rules to /etc/iptables/rules.v4" >&2
+    alert "Failed to save iptables rules to /etc/iptables/rules.v4"
     return 1
   fi
   if [[ -f /etc/iptables.ipv4.nat ]]; then
     if ! run_cmd "iptables-save > /etc/iptables.ipv4.nat"; then
-      echo "Failed to save iptables rules to /etc/iptables.ipv4.nat" >&2
+      alert "Failed to save iptables rules to /etc/iptables.ipv4.nat"
       return 1
     fi
   fi
@@ -155,12 +200,12 @@ ensure_iptables() {
 
 iptables_rule() {
   local rule=$1
-  echo "Configuring iptables rule: $rule"
+  warn "Configuring iptables rule: $rule"
   if iptables ${rule/-A/-C} 2>/dev/null; then
-    echo " - Rule already exists"
+    info " - Rule already exists"
   else
     if ! run_cmd "iptables $rule"; then
-      echo " - Failed to apply rule: $rule" >&2
+      alert " - Failed to apply rule: $rule"
       return 1
     fi
   fi
@@ -184,39 +229,40 @@ start_services() {
     sleep 1
   done
   if ! systemctl is-active --quiet tor; then
-    echo "Tor service inactive; removing Tor NAT rules."
+    warn "Tor service inactive; removing Tor NAT rules."
     remove_tor_iptables
   fi
 }
 
 summary() {
-  echo "\nSSID: $SSID"
-  echo "Access Point IP: $AP_GATEWAY"
+  divider
+  info "SSID: $SSID"
+  info "Access Point IP: $AP_GATEWAY"
   systemctl is-active --quiet tor && tor_status="active" || tor_status="inactive"
-  echo "Tor service: $tor_status"
-  echo "iptables NAT table:"; iptables -t nat -L -n -v | sed -n '1,120p'
+  info "Tor service: $tor_status"
+  info "iptables NAT table:"; iptables -t nat -L -n -v | sed -n '1,120p'
 }
 
 verify_all() {
   local ok=1
-  echo "Verification:"
+  warn "Verification:"
   nmcli -t -f NAME,DEVICE,STATE connection show --active | \
     grep -Fxq "tor-ap:${AP_IFACE}:activated" && \
-    echo " - hotspot active" || { echo " - hotspot inactive"; ok=0; }
+    info " - hotspot active" || { alert " - hotspot inactive"; ok=0; }
   iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p tcp --dport 22 -j REDIRECT --to-ports 22 2>/dev/null && \
-    echo " - SSH redirect present" || { echo " - SSH redirect missing"; ok=0; }
+    info " - SSH redirect present" || { alert " - SSH redirect missing"; ok=0; }
   iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p udp --dport 53 -j REDIRECT --to-ports "${TOR_DNS_PORT}" 2>/dev/null && \
-    echo " - DNS redirect present" || { echo " - DNS redirect missing"; ok=0; }
+    info " - DNS redirect present" || { alert " - DNS redirect missing"; ok=0; }
   iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p tcp --syn -j REDIRECT --to-ports "${TOR_TRANS_PORT}" 2>/dev/null && \
-    echo " - TCP redirect present" || { echo " - TCP redirect missing"; ok=0; }
+    info " - TCP redirect present" || { alert " - TCP redirect missing"; ok=0; }
   systemctl is-active --quiet tor && \
-    echo " - tor service active" || { echo " - tor service inactive"; ok=0; }
+    info " - tor service active" || { alert " - tor service inactive"; ok=0; }
   sysctl -n net.ipv4.ip_forward | grep -Fxq 1 && \
-    echo " - IP forwarding enabled" || { echo " - IP forwarding disabled"; ok=0; }
+    info " - IP forwarding enabled" || { alert " - IP forwarding disabled"; ok=0; }
   if ((ok)); then
-    echo "All functionality verified."
+    info "All functionality verified."
   else
-    echo "One or more checks failed." >&2
+    alert "One or more checks failed."
     return 1
   fi
 }
@@ -234,7 +280,7 @@ uninstall() {
   [[ -f /etc/iptables.ipv4.nat ]] && run_cmd "iptables-save > /etc/iptables.ipv4.nat"
   run_cmd "rm -f /etc/sysctl.d/99-tor-ap.conf"
   run_cmd "sysctl --system"
-  echo "Uninstall complete"
+  info "Uninstall complete"
 }
 
 iptables_unrule() {
@@ -243,6 +289,7 @@ iptables_unrule() {
 }
 
 main() {
+  banner
   require_root
   check_bookworm
   if ((UNINSTALL)); then
