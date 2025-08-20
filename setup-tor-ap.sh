@@ -157,7 +157,9 @@ configure_network(){
     if [ "$DRY_RUN" -eq 1 ]; then
       info "Would set Wi-Fi country to $COUNTRY"
     else
-      run_cmd raspi-config nonint do_wifi_country "$COUNTRY"
+      if ! run_cmd raspi-config nonint do_wifi_country "$COUNTRY"; then
+        warn "Failed to set Wi-Fi country to $COUNTRY"
+      fi
     fi
   fi
   local sysctl_conf=/etc/sysctl.d/99-tor-ap.conf
