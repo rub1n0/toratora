@@ -32,7 +32,6 @@ banner() {
     ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
 EOF
   echo -e "${NC}${RED}${BOLD}>>> TOR AP CONFIGURATION <<<${NC}"
-  divider
 }
 
 #===========================
