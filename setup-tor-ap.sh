@@ -20,6 +20,9 @@ AP_STATUS="UNKNOWN"
 TOTAL_STEPS=10
 CURRENT_STEP=0
 
+LOG_FILE="/var/log/toratora.log"
+: > "$LOG_FILE"
+
 if [ -t 1 ]; then
   IS_TTY=1
 else
@@ -46,7 +49,13 @@ error(){ log ERROR "$RED" "$*"; }
 step(){ CURRENT_STEP=$((CURRENT_STEP+1)); [ "$QUIET" -eq 0 ] && printf "%b▶ [%d/%d] %s%b\n" "$BOLD" "$CURRENT_STEP" "$TOTAL_STEPS" "$1" "$RESET"; }
 
 spinner(){ local pid=$1; local spin='-\|/'; local i=0; [ "$QUIET" -eq 1 ] && { wait "$pid"; return; }; while kill -0 "$pid" 2>/dev/null; do printf "\r%s" "${spin:i++%4:1}"; sleep 0.1; done; printf "\r"; wait "$pid"; }
-run_cmd(){ "$@" & spinner $!; }
+run_cmd(){
+  local cmd="$*"
+  info "Running: $cmd"
+  echo ">> $cmd" >> "$LOG_FILE"
+  { "$@" 2>&1 | tee -a "$LOG_FILE"; } &
+  spinner $!
+}
 
 usage(){ cat <<USAGE
 Usage: sudo ./setup-tor-ap.sh --ssid "toratora" --psk "YourStrongPass" --country US --subnet 10.10.0.0/24 --channel 6 [--dry-run] [--revert] [--quiet] [--no-color]
