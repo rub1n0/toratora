@@ -25,6 +25,15 @@ graph TD
 * Internet connectivity on `eth0`
 * Keyboard/console or SSH access with sudo privileges
 
+## Prepare the SD card
+1. Download and install the [Raspberry Pi Imager](https://www.raspberrypi.com/software/).
+2. Insert your micro‑SD card and launch the Imager.
+3. **Choose OS** ➝ *Raspberry Pi OS (other)* ➝ *Raspberry Pi OS Lite (64‑bit)* for a headless image.
+4. Click the gear icon to pre‑configure:
+   * Hostname, username, and password.
+   * Enable SSH and (optionally) Wi‑Fi credentials for first boot.
+5. Write the image to the card, insert it into the Pi, and power it on.
+
 ## Quick start
 ```bash
 curl -L https://raw.githubusercontent.com/rub1n0/toratora/refs/heads/main/setup-tor-ap.sh -o setup-tor-ap.sh
