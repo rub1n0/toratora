@@ -179,6 +179,30 @@ summary() {
   echo "iptables NAT table:"; iptables -t nat -L -n -v | sed -n '1,120p'
 }
 
+verify_all() {
+  local ok=1
+  echo "Verification:"
+  nmcli -t -f NAME,DEVICE,STATE connection show --active | \
+    grep -Fxq "tor-ap:${AP_IFACE}:activated" && \
+    echo " - hotspot active" || { echo " - hotspot inactive"; ok=0; }
+  iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p tcp --dport 22 -j REDIRECT --to-ports 22 2>/dev/null && \
+    echo " - SSH redirect present" || { echo " - SSH redirect missing"; ok=0; }
+  iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p udp --dport 53 -j REDIRECT --to-ports "${TOR_DNS_PORT}" 2>/dev/null && \
+    echo " - DNS redirect present" || { echo " - DNS redirect missing"; ok=0; }
+  iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p tcp --syn -j REDIRECT --to-ports "${TOR_TRANS_PORT}" 2>/dev/null && \
+    echo " - TCP redirect present" || { echo " - TCP redirect missing"; ok=0; }
+  systemctl is-active --quiet tor && \
+    echo " - tor service active" || { echo " - tor service inactive"; ok=0; }
+  sysctl -n net.ipv4.ip_forward | grep -Fxq 1 && \
+    echo " - IP forwarding enabled" || { echo " - IP forwarding disabled"; ok=0; }
+  if ((ok)); then
+    echo "All functionality verified."
+  else
+    echo "One or more checks failed." >&2
+    return 1
+  fi
+}
+
 uninstall() {
   local torrc=/etc/tor/torrc
   run_cmd "systemctl disable --now tor" || true
@@ -214,6 +238,7 @@ main() {
   ensure_iptables
   start_services
   summary
+  verify_all
 }
 
 main "$@"

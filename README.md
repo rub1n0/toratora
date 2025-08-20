@@ -117,6 +117,9 @@ Backups: `/etc/tor/torrc.bak` is created once. Sysctl and iptables files are mod
 Services: enables `tor` and restores iptables at boot.
 
 ## Verification Checklist
+After setup completes, the script automatically checks that the hotspot, Tor
+service, iptables rules, and IP forwarding are working. You can also manually
+confirm:
 - `nmcli dev` shows hotspot active on `wlan0` with IP `192.168.220.1`.
 - `sudo systemctl status tor` is “active (running)”.
 - `sudo iptables -t nat -L -n -v` lists the three redirect rules.
