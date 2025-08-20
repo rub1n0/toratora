@@ -222,6 +222,10 @@ summary() {
   info "Access Point IP: $AP_GATEWAY"
   systemctl is-active --quiet tor && tor_status="active" || tor_status="inactive"
   info "Tor service: $tor_status"
+  if command -v qrencode &>/dev/null; then
+    info "Wi-Fi access QR:"
+    qrencode -t ansiutf8 "WIFI:S:${SSID};T:WPA;P:${PSK};;" || true
+  fi
   info "iptables NAT table:"
   iptables -t nat -L -n -v | sed -n '1,120p'
 }
