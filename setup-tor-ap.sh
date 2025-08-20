@@ -17,7 +17,7 @@ NO_COLOR=0
 TOR_STATUS="UNKNOWN"
 AP_STATUS="UNKNOWN"
 
-TOTAL_STEPS=10
+TOTAL_STEPS=11
 CURRENT_STEP=0
 
 LOG_FILE="/var/log/toratora.log"
@@ -127,7 +127,6 @@ preflight_checks(){
   systemd-detect-virt --quiet && { error "Virtual environment detected"; exit 1; }
   grep -qi 'Raspberry Pi' /proc/device-tree/model || { error "Not a Raspberry Pi"; exit 1; }
   ip link show eth0 >/dev/null 2>&1 || { error "eth0 missing"; exit 1; }
-  ip link show wlan0 >/dev/null 2>&1 || { error "wlan0 missing"; exit 1; }
   ip link show eth0 | grep -q "state UP" || { error "eth0 down"; exit 1; }
   curl -s --head https://check.torproject.org >/dev/null || { error "No Internet connectivity on eth0"; exit 1; }
   # shellcheck source=/dev/null
@@ -154,6 +153,35 @@ disable_conflicting_services(){
     info "Would disable NetworkManager and wpa_supplicant and unblock wlan0"
   fi
 }
+
+check_wlan_interface(){
+  step "Check wlan0 interface"
+  if ! ip link show wlan0 >/dev/null 2>&1; then
+    error "wlan0 missing"
+    exit 1
+  fi
+
+  if ! ip link show wlan0 | grep -q "state UP"; then
+    warn "wlan0 is down"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      run_cmd ip link set wlan0 up
+      ip link show wlan0 | grep -q "state UP" || { error "Failed to bring wlan0 up"; exit 1; }
+    else
+      info "Would bring wlan0 up"
+    fi
+  else
+    success "wlan0 is up"
+  fi
+
+  if ip addr show wlan0 | grep -q 'inet '; then
+    local ip
+    ip=$(ip -4 addr show wlan0 | awk '/inet /{print $2}')
+    success "wlan0 has IP $ip"
+  else
+    warn "wlan0 has no IP address configured"
+  fi
+}
+
 install_packages(){ step "Install packages"; local pkgs=(tor hostapd dnsmasq jq); if [ "$FIREWALL_TOOL" = "nftables" ]; then pkgs+=(nftables); else pkgs+=(iptables iptables-persistent netfilter-persistent); fi; if [ "$DRY_RUN" -eq 1 ]; then info "Would install: ${pkgs[*]}"; return; fi; run_cmd apt-get update -y; run_cmd apt-get install -y "${pkgs[@]}"; }
 
 configure_network(){
@@ -303,6 +331,6 @@ Use only on networks you control and in accordance with local laws.
 EOF
 }
 
-main(){ parse_args "$@"; print_banner; if [ "$REVERT" -eq 1 ]; then revert_changes; exit 0; fi; preflight_checks; disable_conflicting_services; install_packages; configure_network; configure_hostapd; configure_dnsmasq; configure_tor; configure_firewall; enable_services; verify_setup; summary; }
+main(){ parse_args "$@"; print_banner; if [ "$REVERT" -eq 1 ]; then revert_changes; exit 0; fi; preflight_checks; disable_conflicting_services; check_wlan_interface; install_packages; configure_network; configure_hostapd; configure_dnsmasq; configure_tor; configure_firewall; enable_services; verify_setup; summary; }
 
 main "$@"
