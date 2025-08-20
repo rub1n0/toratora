@@ -55,7 +55,7 @@ graph LR
 NetworkManager creates a Wi-Fi hotspot on `wlan0` with the static gateway `192.168.220.1`. `iptables` PREROUTING rules redirect all TCP SYN packets and UDP DNS queries from clients into Tor's `TransPort` and `DNSPort`. Tor then handles outbound connections over `eth0`. No masquerading is needed because Tor manages the egress routing. Non-TCP protocols (other than UDP/53) are not proxied and will fail.
 
 ## Security Considerations
-- Change the default SSID and pre-shared key immediately.
+  - Use a strong pre-shared key; the SSID is fixed to `toratora`.
 - Keep the system updated.
 - Misconfiguration may expose traffic; Tor exit policies do not guarantee safety.
 - Logging in to personal accounts still reveals identity; do not route illegal traffic.
@@ -63,8 +63,16 @@ NetworkManager creates a Wi-Fi hotspot on `wlan0` with the static gateway `192.1
 
 ## Prerequisites
 - Raspberry Pi with Wi-Fi, SD card, power, and wired internet on `eth0`.
-- Raspberry Pi OS **Bookworm** (32- or 64-bit).
-- NetworkManager and Tor packages available via `apt`.
+  - Raspberry Pi OS **Bookworm** (32- or 64-bit).
+
+## Dependencies
+The setup script installs the following packages if they are not present:
+
+- `tor`
+- `iptables`
+- `iptables-persistent`
+- `qrencode`
+- `network-manager`
 
 ## Raspberry Pi Setup (from blank SD to first boot)
 1. Flash Raspberry Pi OS with Raspberry Pi Imager.
@@ -88,10 +96,10 @@ NetworkManager creates a Wi-Fi hotspot on `wlan0` with the static gateway `192.1
 Download or clone this repository, then:
 ```bash
 chmod +x setup-tor-ap.sh
-sudo SSID="MyTorAP" PSK="StrongPass123!" bash ./setup-tor-ap.sh
+sudo bash ./setup-tor-ap.sh <PSK>
 ```
 Environment variables:
-- `AP_IFACE`, `WAN_IFACE`, `AP_SUBNET`, `AP_GATEWAY`, `SSID`, `PSK`, `TOR_TRANS_PORT`, `TOR_DNS_PORT`
+- `AP_IFACE`, `WAN_IFACE`, `AP_SUBNET`, `AP_GATEWAY`, `TOR_TRANS_PORT`, `TOR_DNS_PORT`
 
 Flags:
 - `--dry-run` – show actions without making changes
@@ -135,7 +143,7 @@ Removes the NetworkManager hotspot, Tor configuration, NAT rules, and sysctl set
 - **Why not nftables?** Bookworm's `iptables-nft` provides compatibility; the script uses classic `iptables` for parity with common guides.
 - **Can I change the subnet?** Yes, set `AP_SUBNET`/`AP_GATEWAY` environment variables.
 - **Does it route UDP?** Only DNS (UDP/53). Other UDP protocols are unsupported through Tor TransPort.
-- **How do I customize SSID/PSK?** Set `SSID` and `PSK` before running the script.
+- **How do I customize SSID/PSK?** The SSID is always `toratora`; provide the desired PSK as an argument when running the script.
 
 ## Ethics & Legal
 Use Tor responsibly. Ensure that all traffic routed through this access point complies with local laws. The authors assume no liability for misuse.
