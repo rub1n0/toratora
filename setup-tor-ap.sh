@@ -40,20 +40,32 @@ else
   RED='' ; GREEN='' ; YELLOW='' ; BLUE='' ; BOLD='' ; RESET=''
 fi
 
-log(){ local lvl="$1"; shift; local col="$1"; shift||true; local msg="$*"; [ "$QUIET" -eq 1 ] && [ "$lvl" = INFO ] && return; printf "%b%s%b\n" "$col" "$msg" "$RESET"; }
+log(){
+  local lvl="$1"; shift; local col="$1"; shift||true; local msg="$*";
+  local ts
+  ts=$(date '+%Y-%m-%d %H:%M:%S')
+  [ "$QUIET" -eq 1 ] && [ "$lvl" = INFO ] && return
+  printf "%b[%s] [%s] %s%b\n" "$col" "$ts" "$lvl" "$msg" "$RESET"
+  echo "[$ts] [$lvl] $msg" >> "$LOG_FILE"
+}
 info(){ log INFO "$BLUE" "$*"; }
 success(){ log INFO "$GREEN" "$*"; }
 warn(){ log WARN "$YELLOW" "$*"; }
 error(){ log ERROR "$RED" "$*"; }
 
-step(){ CURRENT_STEP=$((CURRENT_STEP+1)); [ "$QUIET" -eq 0 ] && printf "%b▶ [%d/%d] %s%b\n" "$BOLD" "$CURRENT_STEP" "$TOTAL_STEPS" "$1" "$RESET"; }
+step(){
+  CURRENT_STEP=$((CURRENT_STEP+1))
+  local msg="▶ [$CURRENT_STEP/$TOTAL_STEPS] $1"
+  [ "$QUIET" -eq 0 ] && printf "%b%s%b\n" "$BOLD" "$msg" "$RESET"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [STEP] $msg" >> "$LOG_FILE"
+}
 
 spinner(){ local pid=$1; local spin='-\|/'; local i=0; [ "$QUIET" -eq 1 ] && { wait "$pid"; return; }; while kill -0 "$pid" 2>/dev/null; do printf "\r%s" "${spin:i++%4:1}"; sleep 0.1; done; printf "\r"; wait "$pid"; }
 run_cmd(){
   local cmd="$*"
   info "Running: $cmd"
-  echo ">> $cmd" >> "$LOG_FILE"
-  { "$@" 2>&1 | tee -a "$LOG_FILE"; } &
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] >> $cmd" >> "$LOG_FILE"
+  { "$@" 2>&1 | awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0 }' | tee -a "$LOG_FILE"; } &
   spinner $!
 }
 
