@@ -21,6 +21,18 @@ success() { printf '%b[ OK ]%b %s\n'   "$GREEN"  "$NC" "$*"; }
 warn()    { printf '%b[WARN]%b %s\n'   "$YELLOW" "$NC" "$*" >&2; }
 error()   { printf '%b[ERR ]%b %s\n'   "$RED"    "$NC" "$*" >&2; }
 
+banner() {
+  printf '%b' "$BOLD$BLUE"
+  cat <<'EOF'
+ _____              _____
+|_   _|__  _ __ __ |_   _|__  _ __ __ _
+  | |/ _ \| '__/ _` || |/ _ \| '__/ _` |
+  | | (_) | | | (_| || | (_) | | | (_| |
+  |_|\___/|_|  \__,_||_|\___/|_|  \__,_|
+EOF
+  printf '%b\n' "$NC"
+}
+
 #===========================
 # Configuration (override via environment except SSID)
 AP_IFACE=${AP_IFACE:-wlan0}
@@ -261,6 +273,7 @@ iptables_unrule() {
 main() {
   require_root
   check_bookworm
+  banner
   printf '%b=== Initiating Toratora deployment ===%b\n' "$BOLD" "$NC"
   if ((UNINSTALL)); then
     uninstall
