@@ -8,26 +8,45 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 #===========================
-# Configuration (override via environment)
+# Configuration (override via environment except SSID)
 AP_IFACE=${AP_IFACE:-wlan0}
 WAN_IFACE=${WAN_IFACE:-eth0}
 AP_SUBNET=${AP_SUBNET:-192.168.220.0/24}
 AP_GATEWAY=${AP_GATEWAY:-192.168.220.1}
-SSID=${SSID:-TorAP}
-PSK=${PSK:-ChangeMe1234}
+SSID=toratora
 TOR_TRANS_PORT=${TOR_TRANS_PORT:-9040}
 TOR_DNS_PORT=${TOR_DNS_PORT:-53}
 #===========================
 
 DRY_RUN=0
 UNINSTALL=0
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY_RUN=1 ;;
-    --uninstall) UNINSTALL=1 ;;
-    *) echo "Unknown option: $arg" >&2; exit 1 ;;
+PSK=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --uninstall)
+      UNINSTALL=1
+      shift
+      ;;
+    *)
+      if [[ -z $PSK ]]; then
+        PSK=$1
+        shift
+      else
+        echo "Unknown option: $1" >&2
+        exit 1
+      fi
+      ;;
   esac
 done
+
+if (( ! UNINSTALL )) && [[ -z $PSK ]]; then
+  echo "Usage: $0 [--dry-run] [--uninstall] <psk>" >&2
+  exit 1
+fi
 
 run_cmd() {
   echo "+ $*"
