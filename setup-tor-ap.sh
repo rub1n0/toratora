@@ -11,7 +11,15 @@ IFS=$'\n\t'
 GREEN=$'\e[32m'
 RED=$'\e[31m'
 BLUE=$'\e[34m'
+YELLOW=$'\e[33m'
+BOLD=$'\e[1m'
 NC=$'\e[0m'
+
+# Styled logging helpers
+info()    { printf '%b[INFO]%b %s\n'   "$BLUE"   "$NC" "$*"; }
+success() { printf '%b[ OK ]%b %s\n'   "$GREEN"  "$NC" "$*"; }
+warn()    { printf '%b[WARN]%b %s\n'   "$YELLOW" "$NC" "$*" >&2; }
+error()   { printf '%b[ERR ]%b %s\n'   "$RED"    "$NC" "$*" >&2; }
 
 #===========================
 # Configuration (override via environment except SSID)
@@ -42,7 +50,7 @@ while [[ $# -gt 0 ]]; do
         PSK=$1
         shift
       else
-        echo "UNKNOWN PARAM: $1" >&2
+        error "UNKNOWN PARAM: $1"
         exit 1
       fi
       ;;
@@ -50,24 +58,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 if (( ! UNINSTALL )) && [[ -z $PSK ]]; then
-  echo "USAGE: $0 [--dry-run] [--uninstall] <psk>" >&2
+  error "USAGE: $0 [--dry-run] [--uninstall] <psk>"
   exit 1
 fi
 
 run_cmd() {
-  printf '%b>>> %s%b\n' "$BLUE" "$*" "$NC"
+  printf '%b[CMD]%b %s\n' "$BLUE" "$NC" "$*"
   if ((DRY_RUN)); then
     return 0
   fi
   if ! eval "$@"; then
-    printf '%b!!! Command failed: %s%b\n' "$RED" "$*" "$NC" >&2
+    error "Command failed: $*"
     return 1
   fi
 }
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
-    printf '%bACCESS DENIED:%b root privileges required\n' "$RED" "$NC" >&2
+    error "ACCESS DENIED: root privileges required"
     exit 1
   fi
 }
@@ -76,11 +84,11 @@ check_bookworm() {
   if [[ -f /etc/os-release ]]; then
     . /etc/os-release
     if [[ ${VERSION_CODENAME:-} != "bookworm" ]]; then
-      printf '%bINCOMPATIBLE OS:%b Raspberry Pi OS Bookworm required\n' "$RED" "$NC" >&2
+      error "INCOMPATIBLE OS: Raspberry Pi OS Bookworm required"
       exit 1
     fi
   else
-    printf '%bSYSTEM FILE MISSING:%b /etc/os-release\n' "$RED" "$NC" >&2
+    error "SYSTEM FILE MISSING: /etc/os-release"
     exit 1
   fi
 }
@@ -105,7 +113,7 @@ ensure_sysctl() {
 
 ensure_hotspot() {
   if ! ip link show "$AP_IFACE" &>/dev/null; then
-    echo "SENSOR FAILURE: interface $AP_IFACE offline" >&2
+    error "SENSOR FAILURE: interface $AP_IFACE offline"
     exit 1
   fi
   local con_name="tor-ap"
@@ -117,7 +125,7 @@ ensure_hotspot() {
   run_cmd "nmcli connection modify '$con_name' ipv4.addresses '$AP_GATEWAY/24' ipv4.method shared ipv4.gateway '$AP_GATEWAY'"
   run_cmd "nmcli connection up '$con_name'"
   if command -v qrencode &>/dev/null; then
-    echo "Broadcasting QR frequency:"; qrencode -t ansiutf8 "WIFI:S:${SSID};T:WPA;P:${PSK};;" || true
+    info "Broadcasting QR frequency:"; qrencode -t ansiutf8 "WIFI:S:${SSID};T:WPA;P:${PSK};;" || true
   fi
 }
 
@@ -147,12 +155,12 @@ ensure_iptables() {
   iptables_rule "-t nat -A PREROUTING -i ${AP_IFACE} -p udp --dport 53 -j REDIRECT --to-ports ${TOR_DNS_PORT}"
   iptables_rule "-t nat -A PREROUTING -i ${AP_IFACE} -p tcp --syn -j REDIRECT --to-ports ${TOR_TRANS_PORT}"
   if ! run_cmd "iptables-save > /etc/iptables/rules.v4"; then
-    echo "Unable to archive firewall rules to /etc/iptables/rules.v4" >&2
+    error "Unable to archive firewall rules to /etc/iptables/rules.v4"
     return 1
   fi
   if [[ -f /etc/iptables.ipv4.nat ]]; then
     if ! run_cmd "iptables-save > /etc/iptables.ipv4.nat"; then
-      echo "Unable to archive firewall rules to /etc/iptables.ipv4.nat" >&2
+      error "Unable to archive firewall rules to /etc/iptables.ipv4.nat"
       return 1
     fi
   fi
@@ -161,12 +169,12 @@ ensure_iptables() {
 
 iptables_rule() {
   local rule=$1
-    echo "Deploying firewall rule: $rule"
+  info "Deploying firewall rule: $rule"
   if iptables ${rule/-A/-C} 2>/dev/null; then
-      echo " - rule already in place"
+    warn " - rule already in place"
   else
     if ! run_cmd "iptables $rule"; then
-        echo " - failed to deploy rule: $rule" >&2
+      error " - failed to deploy rule: $rule"
       return 1
     fi
   fi
@@ -190,40 +198,41 @@ start_services() {
     sleep 1
   done
   if ! systemctl is-active --quiet tor; then
-      echo "ALERT: Tor service inactive; stripping Tor NAT rules."
+      warn "ALERT: Tor service inactive; stripping Tor NAT rules."
     remove_tor_iptables
   fi
 }
 
 summary() {
-  echo -e "\n=== Mission Summary ==="
-  echo "SSID: $SSID"
-  echo "Access Point IP: $AP_GATEWAY"
+  printf '\n%b=== Mission Summary ===%b\n' "$BOLD" "$NC"
+  info "SSID: $SSID"
+  info "Access Point IP: $AP_GATEWAY"
   systemctl is-active --quiet tor && tor_status="active" || tor_status="inactive"
-  echo "Tor service: $tor_status"
-  echo "iptables NAT table:"; iptables -t nat -L -n -v | sed -n '1,120p'
+  info "Tor service: $tor_status"
+  info "iptables NAT table:"
+  iptables -t nat -L -n -v | sed -n '1,120p'
 }
 
 verify_all() {
   local ok=1
-  echo "Diagnostics:"
+  info "Diagnostics:"
   nmcli -t -f NAME,DEVICE,STATE connection show --active | \
     grep -Fxq "tor-ap:${AP_IFACE}:activated" && \
-    echo " - Hotspot link active" || { echo " - Hotspot link inactive"; ok=0; }
+    success "Hotspot link active" || { error "Hotspot link inactive"; ok=0; }
   iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p tcp --dport 22 -j REDIRECT --to-ports 22 2>/dev/null && \
-    echo " - SSH redirect engaged" || { echo " - SSH redirect missing"; ok=0; }
+    success "SSH redirect engaged" || { error "SSH redirect missing"; ok=0; }
   iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p udp --dport 53 -j REDIRECT --to-ports "${TOR_DNS_PORT}" 2>/dev/null && \
-    echo " - DNS redirect engaged" || { echo " - DNS redirect missing"; ok=0; }
+    success "DNS redirect engaged" || { error "DNS redirect missing"; ok=0; }
   iptables -t nat -C PREROUTING -i "${AP_IFACE}" -p tcp --syn -j REDIRECT --to-ports "${TOR_TRANS_PORT}" 2>/dev/null && \
-    echo " - TCP redirect engaged" || { echo " - TCP redirect missing"; ok=0; }
+    success "TCP redirect engaged" || { error "TCP redirect missing"; ok=0; }
   systemctl is-active --quiet tor && \
-    echo " - Tor service active" || { echo " - Tor service inactive"; ok=0; }
+    success "Tor service active" || { error "Tor service inactive"; ok=0; }
   sysctl -n net.ipv4.ip_forward | grep -Fxq 1 && \
-    echo " - IP forwarding engaged" || { echo " - IP forwarding offline"; ok=0; }
+    success "IP forwarding engaged" || { error "IP forwarding offline"; ok=0; }
   if ((ok)); then
-    echo "Systems check: all green."
+    success "Systems check: all green."
   else
-    echo "Diagnostics report: anomalies detected." >&2
+    error "Diagnostics report: anomalies detected."
     return 1
   fi
 }
@@ -241,7 +250,7 @@ uninstall() {
   [[ -f /etc/iptables.ipv4.nat ]] && run_cmd "iptables-save > /etc/iptables.ipv4.nat"
   run_cmd "rm -f /etc/sysctl.d/99-tor-ap.conf"
   run_cmd "sysctl --system"
-  echo "Uninstall protocol complete"
+  success "Uninstall protocol complete"
 }
 
 iptables_unrule() {
@@ -252,7 +261,7 @@ iptables_unrule() {
 main() {
   require_root
   check_bookworm
-  printf '%b>> Initiating Toratora deployment...%b\n' "$GREEN" "$NC"
+  printf '%b=== Initiating Toratora deployment ===%b\n' "$BOLD" "$NC"
   if ((UNINSTALL)); then
     uninstall
     return
