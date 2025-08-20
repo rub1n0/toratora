@@ -77,6 +77,7 @@ Expected banner:
 3. Connect a Wi‑Fi client and browse [check.torproject.org](https://check.torproject.org) to confirm `IsTor: true`.
 
 ## Troubleshooting
+* **Installer log** – review `/var/log/toratora.log` for full command output, especially if the "Configure network" step fails.
 * **Wi‑Fi blocked** – run `rfkill list` and `rfkill unblock wifi`.
 * **hostapd fails** – check `journalctl -u hostapd` for channel/country errors.
 * **NetworkManager vs dhcpcd** – ensure only one manages `wlan0`.
