@@ -55,7 +55,7 @@ graph LR
 NetworkManager creates a Wi-Fi hotspot on `wlan0` with the static gateway `192.168.220.1`. `iptables` PREROUTING rules redirect all TCP SYN packets and UDP DNS queries from clients into Tor's `TransPort` and `DNSPort`. Tor then handles outbound connections over `eth0`. No masquerading is needed because Tor manages the egress routing. Non-TCP protocols (other than UDP/53) are not proxied and will fail.
 
 ## Security Considerations
-  - Use a strong pre-shared key; the SSID is fixed to `toratora`.
+- Use a strong pre-shared key; the SSID is fixed to `toratora`.
 - Keep the system updated.
 - Misconfiguration may expose traffic; Tor exit policies do not guarantee safety.
 - Logging in to personal accounts still reveals identity; do not route illegal traffic.
@@ -63,7 +63,7 @@ NetworkManager creates a Wi-Fi hotspot on `wlan0` with the static gateway `192.1
 
 ## Prerequisites
 - Raspberry Pi with Wi-Fi, SD card, power, and wired internet on `eth0`.
-  - Raspberry Pi OS **Bookworm** (32- or 64-bit).
+- Raspberry Pi OS **Bookworm** (32- or 64-bit).
 
 ## Dependencies
 The setup script installs the following packages if they are not present:
@@ -93,7 +93,7 @@ The setup script installs the following packages if they are not present:
 7. Set timezone/locale/keyboard as needed.
 
 ## Script Installation & Usage
-Download or clone this repository, then:
+Download or clone this repository, then run the script with root privileges, providing the desired Wi-Fi password as `<PSK>`:
 ```bash
 chmod +x setup-tor-ap.sh
 sudo bash ./setup-tor-ap.sh <PSK>
@@ -117,9 +117,7 @@ Backups: `/etc/tor/torrc.bak` is created once. Sysctl and iptables files are mod
 Services: enables `tor` and restores iptables at boot.
 
 ## Verification Checklist
-After setup completes, the script automatically checks that the hotspot, Tor
-service, iptables rules, and IP forwarding are working. You can also manually
-confirm:
+After setup completes, the script automatically checks that the hotspot, Tor service, iptables rules, and IP forwarding are working. You can also manually confirm:
 - `nmcli dev` shows hotspot active on `wlan0` with IP `192.168.220.1`.
 - `sudo systemctl status tor` is “active (running)”.
 - `sudo iptables -t nat -L -n -v` lists the three redirect rules.
