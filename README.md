@@ -1,15 +1,17 @@
 # Raspberry Pi Tor Wi-Fi Access Point
 
-A one-command setup that turns a Raspberry Pi running Raspberry Pi OS Bookworm into a Wi-Fi hotspot whose clients are transparently routed through the Tor anonymity network. It is idempotent, reversible, and uses NetworkManager for Wi-Fi configuration.
+Turn a Raspberry Pi running Raspberry Pi OS Bookworm into a Wi-Fi hotspot
+whose clients are transparently routed through the Tor network. The setup
+is idempotent, reversible, and uses NetworkManager for Wi-Fi configuration.
 
-## At-a-glance Features
+## At a Glance
 - One-command setup script
 - Wi-Fi access point via NetworkManager
 - Transparent Tor routing (TransPort/DNSPort)
 - Idempotent & reversible configuration
 - Works on Raspberry Pi OS Bookworm
 
-## Architecture & Network Diagrams
+## Architecture
 
 ```mermaid
 graph TD
@@ -17,10 +19,6 @@ graph TD
   AP -->|PREROUTING| NAT[iptables]
   NAT --> Tor
   Tor -->|eth0| Internet
-```
-
-```
-Client --> wlan0 (AP) --> iptables PREROUTING --> Tor (TransPort/DNSPort) --> eth0 --> Internet
 ```
 
 ```mermaid
@@ -31,28 +29,13 @@ graph LR
   AP_IP -- 9040 & 53 --> Tor
 ```
 
-```
-+-----------------------+
-| Clients 192.168.220.x |
-+-----------------------+
-           |
-           | wifi
-           v
-+------------------------+
-| AP wlan0 192.168.220.1 |
-+------------------------+
-           |
-      iptables PREROUTING
-           |
-           v
-+----- Tor TransPort 9040 / DNSPort 53 ----+
-           |
-           v
-        eth0 -> Internet
-```
-
-## How It Works (Deep Dive)
-NetworkManager creates a Wi-Fi hotspot on `wlan0` with the static gateway `192.168.220.1`. `iptables` PREROUTING rules redirect all TCP SYN packets and UDP DNS queries from clients into Tor's `TransPort` and `DNSPort`. Tor then handles outbound connections over `eth0`. No masquerading is needed because Tor manages the egress routing. Non-TCP protocols (other than UDP/53) are not proxied and will fail.
+## How It Works
+NetworkManager creates a hotspot on `wlan0` with gateway `192.168.220.1`.
+`iptables` PREROUTING rules redirect all TCP SYN packets and DNS queries
+from clients to Tor's `TransPort` and `DNSPort`. Tor then routes outbound
+traffic through `eth0`. No masquerading is needed because Tor manages the
+egress path. Non-TCP protocols (other than UDP/53) are not proxied and will
+fail.
 
 ## Security Considerations
 - Use a strong pre-shared key; the SSID is fixed to `toratora`.
@@ -98,8 +81,13 @@ Download or clone this repository, then run the script with root privileges, pro
 chmod +x setup-tor-ap.sh
 sudo bash ./setup-tor-ap.sh <PSK>
 ```
-Environment variables:
-- `AP_IFACE`, `WAN_IFACE`, `AP_SUBNET`, `AP_GATEWAY`, `TOR_TRANS_PORT`, `TOR_DNS_PORT`
+Environment variables (override defaults):
+- `AP_IFACE` (default `wlan0`)
+- `WAN_IFACE` (default `eth0`)
+- `AP_SUBNET` (default `192.168.220.0/24`)
+- `AP_GATEWAY` (default `192.168.220.1`)
+- `TOR_TRANS_PORT` (default `9040`)
+- `TOR_DNS_PORT` (default `53`)
 
 Flags:
 - `--dry-run` – show actions without making changes
@@ -114,7 +102,7 @@ Backups: `/etc/tor/torrc.bak` is created once. Sysctl and iptables files are mod
 - `/etc/iptables/rules.v4` (and `/etc/iptables.ipv4.nat` if present) – persists NAT redirects
 - NetworkManager connection `tor-ap`
 
-Services: enables `tor` and restores iptables at boot.
+Services: enables `tor` and saves iptables rules for automatic restore at boot.
 
 ## Verification Checklist
 After setup completes, the script automatically checks that the hotspot, Tor service, iptables rules, and IP forwarding are working. You can also manually confirm:
