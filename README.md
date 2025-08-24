@@ -10,6 +10,7 @@ is idempotent, reversible, and uses NetworkManager for Wi-Fi configuration.
 - Transparent Tor routing (TransPort/DNSPort)
 - Idempotent & reversible configuration
 - Works on Raspberry Pi OS Bookworm
+- Optional Unicorn HAT status display
 
 ## Architecture
 
@@ -112,6 +113,13 @@ After setup completes, the script automatically checks that the hotspot, Tor ser
 - On a client connected to the AP:
   - DNS queries resolve.
   - `curl https://check.torproject.org/` shows Tor usage.
+
+## Optional Status Matrix
+If a Pimoroni Unicorn HAT or Unicorn HAT HD is attached you can run
+`status_matrix_service.py` to display Pi health, Tor status, access point
+status, and traffic levels. The service reads settings from
+`status_matrix.yaml`. Set `use_unicorn_hat: false` in that file if the
+hardware is not present.
 
 ## Troubleshooting
 - **Tor bind errors**: ensure the hotspot is up before Tor starts; the script retries for 30s.

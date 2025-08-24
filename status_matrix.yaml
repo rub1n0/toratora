@@ -1,4 +1,5 @@
 device: auto
+use_unicorn_hat: true
 iface: auto
 frame_ms: 80
 brightness: 0.35
