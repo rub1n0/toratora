@@ -7,6 +7,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors for techno-thriller console output
 GREEN=$'\e[32m'
 RED=$'\e[31m'
@@ -107,7 +109,7 @@ check_bookworm() {
 }
 
 ensure_packages() {
-  local packages=(tor iptables iptables-persistent qrencode network-manager)
+  local packages=(tor iptables iptables-persistent qrencode network-manager python3-yaml)
   local IFS=' '
   run_cmd "apt-get update"
   run_cmd "apt-get -y upgrade"
@@ -275,6 +277,22 @@ iptables_unrule() {
   iptables ${rule/-D/-C} 2>/dev/null && run_cmd "iptables $rule" || true
 }
 
+detect_unicorn_hat() {
+  PYTHONPATH="$SCRIPT_DIR" python3 - <<'PY'
+import status_matrix, sys
+sys.exit(0 if status_matrix.detect_unicorn_hat() else 1)
+PY
+}
+
+start_status_matrix_service() {
+  if detect_unicorn_hat; then
+    info "Unicorn HAT detected; launching status matrix service"
+    run_cmd "nohup python3 \"$SCRIPT_DIR/status_matrix_service.py\" --config \"$SCRIPT_DIR/status_matrix.yaml\" >/var/log/status_matrix.log 2>&1 &"
+  else
+    info "Unicorn HAT not detected; skipping status matrix service"
+  fi
+}
+
 main() {
   require_root
   check_bookworm
@@ -290,6 +308,7 @@ main() {
   ensure_torrc
   ensure_iptables
   start_services
+  start_status_matrix_service
   summary
   verify_all
 }

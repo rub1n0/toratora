@@ -1,4 +1,7 @@
 import time
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import status_matrix
 from status_matrix import StatusMatrix, Config
 
@@ -21,6 +24,10 @@ def test_disabled_unicorn_hat_uses_dummy():
     cfg = Config(use_unicorn_hat=False)
     sm = StatusMatrix(config=cfg)
     assert isinstance(sm.uh, status_matrix.DummyUnicorn)
+
+
+def test_detect_unicorn_hat_false_when_missing():
+    assert not status_matrix.detect_unicorn_hat()
 
 
 def test_hd_slice():
