@@ -42,6 +42,7 @@ class DummyUnicorn:
 @dataclass
 class Config:
     device: str = "auto"
+    use_unicorn_hat: bool = True
     iface: str = "auto"
     frame_ms: int = 80
     brightness: float = 0.35
@@ -81,6 +82,11 @@ class StatusMatrix:
 
     def _init_device(self):
         self.hd = False
+        if not self.config.use_unicorn_hat:
+            self.uh = DummyUnicorn()
+            self.uh.brightness(self.config.brightness)
+            return
+
         uh = None
         if self.config.device in ("auto", "unicorn_hat"):
             try:  # pragma: no cover - requires hardware

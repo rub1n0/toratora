@@ -30,11 +30,15 @@ def main():
     parser.add_argument('--config', default='status_matrix.yaml')
     parser.add_argument('--brightness', type=float)
     parser.add_argument('--iface')
+    parser.add_argument('--no-hat', action='store_true',
+                        help='run without Unicorn HAT output')
     parser.add_argument('--demo', action='store_true')
     parser.add_argument('--print-debug', action='store_true')
     args = parser.parse_args()
-
     sm = StatusMatrix(config_path=args.config)
+    if args.no_hat:
+        sm.config.use_unicorn_hat = False
+        sm._init_device()
     if args.brightness is not None:
         sm.uh.brightness(args.brightness)
     if args.iface:

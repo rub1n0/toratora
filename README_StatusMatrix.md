@@ -19,7 +19,8 @@ sudo apt install python3-yaml
 ```
 
 2. Copy files to desired directory, e.g. `/home/pi`.
-3. Adjust `status_matrix.yaml` if required.
+3. Adjust `status_matrix.yaml` if required. Set `use_unicorn_hat: false`
+   to run the service without the hardware.
 
 ## Running
 
@@ -28,6 +29,7 @@ python3 status_matrix_service.py --config status_matrix.yaml
 ```
 
 Use `--demo` to run a simple colour cycle demonstration. `--print-debug` dumps collected metrics once per second.
+Add `--no-hat` to run without Unicorn HAT output.
 
 ## Service
 

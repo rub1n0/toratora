@@ -17,6 +17,12 @@ def test_traffic_bucket():
     assert level == 4  # above highest bucket
 
 
+def test_disabled_unicorn_hat_uses_dummy():
+    cfg = Config(use_unicorn_hat=False)
+    sm = StatusMatrix(config=cfg)
+    assert isinstance(sm.uh, status_matrix.DummyUnicorn)
+
+
 def test_hd_slice():
     cfg = Config()
     sm = StatusMatrix(config=cfg)
