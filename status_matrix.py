@@ -5,6 +5,7 @@ import logging
 import shutil
 import subprocess
 import math
+import importlib.util
 from dataclasses import dataclass, field
 from typing import Tuple, Optional, Dict, Any
 
@@ -37,6 +38,17 @@ class DummyUnicorn:
 
     def clear(self):
         pass
+
+
+def detect_unicorn_hat() -> bool:
+    """Return True if a Unicorn HAT or Unicorn HAT HD library is available."""
+    try:
+        return (
+            importlib.util.find_spec("unicornhat") is not None
+            or importlib.util.find_spec("unicornhathd") is not None
+        )
+    except Exception:
+        return False
 
 
 @dataclass

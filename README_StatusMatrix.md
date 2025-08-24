@@ -15,7 +15,8 @@ This module provides a small status display on the Pimoroni Unicorn HAT. Four qu
 1. Install dependencies:
 
 ```bash
-sudo apt install python3-yaml
+sudo apt install python3-yaml python3-unicornhat python3-unicornhathd
+# or use: pip install -r requirements.txt
 ```
 
 2. Copy files to desired directory, e.g. `/home/pi`.
